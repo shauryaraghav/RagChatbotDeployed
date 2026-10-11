@@ -1,0 +1,22 @@
+# Lightweight image for 512MB free hosts (Render free tier).
+# Uses Gemini embeddings API instead of local torch models; no cross-encoder.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    EMBEDDING_BACKEND=gemini \
+    ENABLE_RERANK=0
+
+WORKDIR /app
+
+COPY requirements-lite.txt .
+RUN pip install -r requirements-lite.txt
+
+COPY . .
+
+RUN useradd -m -u 1000 user && mkdir -p /app/storage && chown -R user /app
+USER user
+
+EXPOSE 10000
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]
