@@ -79,6 +79,8 @@ genai.configure(api_key=api_key)
 # Embedding backend:
 #   EMBEDDING_BACKEND=local  -> sentence-transformers (all-MiniLM-L6-v2), needs ~1GB+ RAM
 #   EMBEDDING_BACKEND=gemini -> Gemini embeddings API, tiny memory footprint (fits 512MB hosts)
+# Generation model (gemini-2.0-flash was retired by Google on 2026-06-01). Override with GEMINI_MODEL.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "local").lower()
 GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
 embedding_model = None
@@ -114,7 +116,7 @@ crawl_store = CrawlStore(STORAGE_DIR / "webintel_store.json")
 def _sync_generate(prompt: str) -> str:
     """Thin sync wrapper around Gemini for modules that don't want to know
     about the streaming API (action resolution, eval-set generation)."""
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel(GEMINI_MODEL)
     response = model.generate_content(prompt)
     return response.text
 
@@ -644,7 +646,7 @@ def build_prompt(query: str) -> str:
 async def real_gemini_response(prompt: str):
     """Calls Google Gemini API to generate a structured response."""
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(prompt)
         
         if hasattr(response, "text"):  # Ensure response has text
@@ -735,7 +737,7 @@ async def stream_gemini_response(prompt: str):
             yield prompt.replace("METADATA_RESPONSE:", "").strip() + "\n"
             return
             
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL)
         safety_settings = {
             "HARM_CATEGORY_HARASSMENT": "block_none",
             "HARM_CATEGORY_HATE_SPEECH": "block_none",
@@ -772,6 +774,7 @@ async def stream_gemini_response(prompt: str):
                 await asyncio.sleep(0.01)
             
     except Exception as e:
+        logger.exception("stream_query failed")
         error_msg = str(e)
         if "429" in error_msg or "quota" in error_msg.lower():
             yield "I apologize, but I'm experiencing high traffic at the moment. Please try again in a few seconds."
